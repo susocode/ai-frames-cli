@@ -1,0 +1,31 @@
+{
+  "name": "@ai-frames/server",
+  "version": "0.1.0",
+  "description": "ai-frames server — API + static UI server",
+  "main": "dist/index.js",
+  "bin": {
+    "ai-frames": "../../bin/ai-frames.js"
+  },
+  "scripts": {
+    "dev": "tsx watch src/index.ts",
+    "dev:debug": "AIFRAME_DEBUG=1 tsx watch src/index.ts",
+    "build": "tsc",
+    "lint": "eslint src"
+  },
+  "dependencies": {
+    "chalk": "^5.3.0",
+    "commander": "^12.1.0",
+    "devcert": "^1.2.3",
+    "express": "^4.19.2",
+    "keytar": "^7.9.0",
+    "open": "^10.1.0",
+    "simple-git": "^3.27.0",
+    "yaml": "^2.5.0"
+  },
+  "devDependencies": {
+    "@types/express": "^4.17.21",
+    "@types/node": "^22.0.0",
+    "tsx": "^4.19.0",
+    "typescript": "^5.6.0"
+  }
+}
