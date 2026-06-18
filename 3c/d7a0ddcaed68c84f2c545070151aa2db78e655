@@ -1,0 +1,19 @@
+README.md
+  s_9113977bc81814::t_33414a37ea2b47 1-157
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.5.6",
+  "base_commit_sha": "3cd7a0ddcaed68c84f2c545070151aa2db78e655",
+  "prompts": {},
+  "sessions": {
+    "s_9113977bc81814": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "339d2254-fb1c-44c1-8f08-8971f7e77fb7",
+        "model": "claude-sonnet-4-6"
+      },
+      "human_author": "Juan Sebastian Suaza Solano <juansss@ext.inditex.com>"
+    }
+  }
+}
