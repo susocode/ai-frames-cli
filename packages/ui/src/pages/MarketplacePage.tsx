@@ -140,7 +140,7 @@ export default function MarketplacePage({ type, title, subtitle }: Props) {
         />
       )}
 
-      <div className="marketplace-footer visible">
+      <div className={`marketplace-footer ${hasChanges ? 'visible' : ''}`}>
         <span className="marketplace-footer-count">
           {selected.length} selected
         </span>

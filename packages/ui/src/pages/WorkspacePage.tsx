@@ -294,7 +294,7 @@ export default function WorkspacePage() {
             ))}
           </div>
 
-          <div className="marketplace-footer visible">
+          <div className={`marketplace-footer ${hasChanges ? 'visible' : ''}`}>
             <span className="marketplace-footer-count">
               {selected.size} {t.assistants_title.toLowerCase()}
             </span>

@@ -153,7 +153,7 @@ export default function TemplatesPage() {
       )}
 
 
-      <div className="marketplace-footer visible">
+      <div className={`marketplace-footer ${hasChanges ? 'visible' : ''}`}>
         <span className="marketplace-footer-count">{selected.length} selected</span>
         <button
           className={`btn-primary ${installState === 'installed' ? 'btn-saved' : ''}`}
