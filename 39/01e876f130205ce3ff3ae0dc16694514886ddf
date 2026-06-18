@@ -1,0 +1,27 @@
+packages/ui/public/favicon.svg
+  s_9113977bc81814::t_12d5011f55e70b 1-21
+packages/ui/src/components/SidebarLink.tsx
+  s_9113977bc81814::t_12d5011f55e70b 10,14,28
+packages/ui/src/pages/MainLayout.tsx
+  s_9113977bc81814::t_12d5011f55e70b 84-95,149,175,179,185
+packages/ui/index.html
+  s_9113977bc81814::t_12d5011f55e70b 6-7
+packages/ui/src/index.css
+  s_9113977bc81814::t_12d5011f55e70b 66,551-559
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.5.6",
+  "base_commit_sha": "3901e876f130205ce3ff3ae0dc16694514886ddf",
+  "prompts": {},
+  "sessions": {
+    "s_9113977bc81814": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "339d2254-fb1c-44c1-8f08-8971f7e77fb7",
+        "model": "claude-sonnet-4-6"
+      },
+      "human_author": "Juan Sebastian Suaza Solano <juansss@ext.inditex.com>"
+    }
+  }
+}
