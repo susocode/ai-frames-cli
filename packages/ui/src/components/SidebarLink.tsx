@@ -7,10 +7,11 @@ interface Props {
   end?: boolean
   label: string
   collapsed: boolean
+  soon?: boolean
   children: React.ReactNode
 }
 
-export default function SidebarLink({ to, end, label, collapsed, children }: Props) {
+export default function SidebarLink({ to, end, label, collapsed, soon, children }: Props) {
   const [pos, setPos] = useState<{ top: number; left: number } | null>(null)
   const ref = useRef<HTMLAnchorElement>(null)
 
@@ -24,6 +25,7 @@ export default function SidebarLink({ to, end, label, collapsed, children }: Pro
     <>
       <NavLink to={to} end={end} ref={ref} onMouseEnter={showTooltip} onMouseLeave={() => setPos(null)}>
         {children}
+        {soon && !collapsed && <span className="sidebar-soon-dot" />}
       </NavLink>
       {pos && createPortal(
         <div className="sidebar-tooltip" style={{ top: pos.top, left: pos.left }}>
