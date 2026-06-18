@@ -1,12 +1,16 @@
 import { useEffect, useState } from 'react'
 import { useLang } from '../i18n/LangContext'
+import DirHint from './DirHint'
+import CustomMappings from './CustomMappings'
 
 interface DirEntry { path: string; exists: boolean; synced: boolean | null }
 interface DirMapping { repo_path: string; local_path: string }
+interface DirEntry { path: string; exists: boolean; synced: boolean | null; repo_path: string; local_path: string }
 
 interface Props {
   id: string
   label: string
+  prefix: string
   isSelected: boolean
   dirs: DirEntry[]
   inRepo: boolean
@@ -15,7 +19,7 @@ interface Props {
   onDirsCreated: () => void
 }
 
-export default function AssistantCard({ id, label, isSelected, dirs, inRepo, onToggle, onSave, onDirsCreated }: Props) {
+export default function AssistantCard({ id, label, prefix, isSelected, dirs, inRepo, onToggle, onSave, onDirsCreated }: Props) {
   const { t } = useLang()
 
   const allExist = dirs.length > 0 && dirs.every(d => d.exists)
@@ -23,13 +27,18 @@ export default function AssistantCard({ id, label, isSelected, dirs, inRepo, onT
 
   // Custom mappings for this assistant
   const [mappings, setMappings] = useState<DirMapping[]>([])
-  const [newRepo, setNewRepo] = useState('')
-  const [newLocal, setNewLocal] = useState('')
+  const [entries, setEntries] = useState<DirEntry[]>([])
   const [mappingSaving, setMappingSaving] = useState(false)
+
+  async function loadMappings() {
+    const d = await fetch(`/api/custom-dirs/${id}`).then(r => r.json())
+    setMappings(d.mappings ?? [])
+    setEntries(d.entries ?? [])
+  }
 
   useEffect(() => {
     if (!isSelected) return
-    fetch(`/api/custom-dirs/${id}`).then(r => r.json()).then(d => setMappings(d.mappings ?? []))
+    loadMappings()
   }, [id, isSelected])
 
   async function createDirs() {
@@ -46,27 +55,8 @@ export default function AssistantCard({ id, label, isSelected, dirs, inRepo, onT
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(updated),
     })
-    setMappings(updated)
+    await loadMappings()
   }
-
-  async function addMapping() {
-    if (!newRepo.trim()) return
-    setMappingSaving(true)
-    const updated = [...mappings, { repo_path: newRepo.trim(), local_path: newLocal.trim() }]
-    setNewRepo('')
-    setNewLocal('')
-    await persistMappings(updated)
-    setMappingSaving(false)
-  }
-
-  async function removeMapping(i: number) {
-    await persistMappings(mappings.filter((_, j) => j !== i))
-  }
-
-  const isDuplicate = !!newRepo.trim() && mappings.some(
-    m => m.repo_path === newRepo.trim() ||
-    m.local_path === (newLocal.trim() || (newRepo.trim().startsWith('.aicontext/') ? newRepo.trim() : `.aicontext/${newRepo.trim()}`))
-  )
 
   return (
     <div className="assistant-select-row">
@@ -99,68 +89,66 @@ export default function AssistantCard({ id, label, isSelected, dirs, inRepo, onT
 
           {/* Dirs table — shown when repo has them */}
           {inRepo && dirs.length > 0 && (
-            <div className="assistant-select-dirs">
-              {dirs.map(d => (
-                <div key={d.path} className="assistant-select-dir">
-                  <span className="assistant-select-dir-path">{d.path}</span>
-                  <span className={`workspace-status ${d.exists ? 'ok' : 'missing'}`}>
-                    {d.exists ? `✓ ${t.workspace_status_ok}` : `✕ ${t.workspace_status_missing}`}
-                  </span>
-                </div>
-              ))}
+            <div className="workspace-group" style={{ marginBottom: 0 }}>
+            <table className="repo-table workspace-table">
+              <thead>
+                <tr>
+                  <th style={{ textAlign: 'left' }}>{t.workspace_col_path}</th>
+                  <th style={{ textAlign: 'right', width: 90 }}>{t.workspace_col_status}</th>
+                  <th style={{ textAlign: 'right', width: 110 }}>Sync</th>
+                </tr>
+              </thead>
+              <tbody>
+                {dirs.map(d => (
+                  <tr key={d.path}>
+                    <td className="source">
+                      {d.path}
+                      <DirHint dirPath={d.path} />
+                    </td>
+                    <td style={{ textAlign: 'right' }}>
+                      <span className={`workspace-status ${d.exists ? 'ok' : 'missing'}`}>
+                        {d.exists ? `✓ ${t.workspace_status_ok}` : `✕ ${t.workspace_status_missing}`}
+                      </span>
+                    </td>
+                    <td style={{ textAlign: 'right' }}>
+                      {d.exists && d.synced !== null && (
+                        <span className={`workspace-status ${d.synced ? 'ok' : 'outdated'}`}>
+                          {d.synced ? `✓ ${t.workspace_status_synced}` : `⚠ ${t.workspace_status_outdated}`}
+                        </span>
+                      )}
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
             </div>
           )}
 
           {/* Custom mappings — shown when in repo */}
           {inRepo && (
-            <div className="assistant-custom-section">
-              <span className="assistant-custom-label">{t.assistant_custom_mappings}</span>
-
-              {mappings.length > 0 && (
-                <table className="repo-table workspace-table" style={{ marginBottom: 8 }}>
-                  <tbody>
-                    {mappings.map((m, i) => (
-                      <tr key={i}>
-                        <td className="source">{m.repo_path}</td>
-                        <td className="source">{m.local_path || `(same as repo)`}</td>
-                        <td style={{ textAlign: 'right' }}>
-                          <button className="btn-danger custom-dirs-remove" onClick={() => removeMapping(i)}>
-                            {t.workspace_custom_remove}
-                          </button>
-                        </td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-              )}
-
-              <div className="custom-dirs-row">
-                <input
-                  className="custom-dirs-input"
-                  placeholder={t.workspace_custom_repo_placeholder}
-                  value={newRepo}
-                  onChange={e => setNewRepo(e.target.value)}
-                />
-                <span className="custom-dirs-arrow">→</span>
-                <input
-                  className="custom-dirs-input"
-                  placeholder={newRepo.trim()
-                    ? newRepo.trim().startsWith('.aicontext/') ? newRepo.trim() : `.aicontext/${newRepo.trim()}`
-                    : t.workspace_custom_local_placeholder}
-                  value={newLocal}
-                  onChange={e => setNewLocal(e.target.value)}
-                />
-                <button
-                  className="btn-primary"
-                  disabled={!newRepo.trim() || mappingSaving || isDuplicate}
-                  onClick={addMapping}
-                >
-                  {mappingSaving ? t.workspace_custom_saving : t.workspace_custom_save}
-                </button>
-              </div>
-              {isDuplicate && (
-                <small className="hint-error" style={{ marginTop: 4 }}>✕ {t.workspace_custom_duplicate}</small>
-              )}
+            <div className="custom-dirs-section" style={{ marginTop: 8 }}>
+              <CustomMappings
+                mappings={mappings}
+                savedEntries={entries}
+                assistantPrefix={prefix}
+                saving={mappingSaving}
+                onAdd={async (repo, local) => {
+                  setMappingSaving(true)
+                  const updated = [...mappings, { repo_path: repo, local_path: local }]
+                  await persistMappings(updated)
+                  setMappingSaving(false)
+                }}
+                onRemove={async (i, localPath, exists) => {
+                  if (exists) {
+                    await fetch('/api/custom-dirs/local', {
+                      method: 'DELETE',
+                      headers: { 'Content-Type': 'application/json' },
+                      body: JSON.stringify({ local_path: localPath }),
+                    })
+                  }
+                  await persistMappings(mappings.filter((_, j) => j !== i))
+                }}
+              />
             </div>
           )}
         </div>

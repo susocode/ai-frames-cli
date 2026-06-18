@@ -13,6 +13,8 @@ import { repoCreateRouter } from './routes/repo-create.js'
 import { workspaceCheckRouter } from './routes/workspace-check.js'
 import { workspaceDirsRouter } from './routes/workspace-dirs.js'
 import { assistantInitRouter } from './routes/assistant-init.js'
+import { marketplaceRouter } from './routes/marketplace.js'
+import { assistantsRouter } from './routes/assistants.js'
 import { customDirsRouter } from './routes/custom-dirs.js'
 import { repoSyncRouter } from './routes/repo-sync.js'
 import { repoInitRouter } from './routes/repo-init.js'
@@ -47,6 +49,8 @@ export async function startServer() {
   app.use('/api/repo-status', repoStatusRouter)
   app.use('/api/repo-init', repoInitRouter)
   app.use('/api/repo-sync', repoSyncRouter)
+  app.use('/api/marketplace', marketplaceRouter)
+  app.use('/api/assistants', assistantsRouter)
   app.use('/api/custom-dirs', customDirsRouter)
   app.use('/api/assistant-init', assistantInitRouter)
 

@@ -41,13 +41,48 @@ customDirsRouter.get('/', (_req, res) => {
   res.json({ mappings: loadMappings(context.id) })
 })
 
+// DELETE /api/custom-dirs/local — remove the local directory for a mapping
+customDirsRouter.delete('/local', (req, res) => {
+  const context = getActiveContext()
+  if (!context) { errorResponse(res, 'context-not-found', 404); return }
+  const { local_path } = req.body as { local_path: string }
+  if (!local_path?.trim()) { errorResponse(res, 'invalid-input'); return }
+  try {
+    const full = path.join(context.workspace, local_path.trim())
+    // Safety: must be inside the workspace
+    if (!full.startsWith(context.workspace)) {
+      errorResponse(res, 'invalid-input')
+      return
+    }
+    if (fs.existsSync(full)) {
+      fs.rmSync(full, { recursive: true, force: true })
+    }
+    res.json({ ok: true })
+  } catch (err) { catchError(res, err) }
+})
+
 // GET /api/custom-dirs/:assistant
 customDirsRouter.get('/:assistant', (req, res) => {
   const context = getActiveContext()
   if (!context) { errorResponse(res, 'context-not-found', 404); return }
   const f = assistantCustomDirsFile(context.id, req.params.assistant)
-  const mappings = fs.existsSync(f) ? parse(fs.readFileSync(f, 'utf8')) as DirMapping[] : []
-  res.json({ mappings })
+  const mappings: DirMapping[] = fs.existsSync(f) ? parse(fs.readFileSync(f, 'utf8')) ?? [] : []
+
+  // Enrich with exists status from workspace
+  const entries = mappings.map(m => {
+    const localRel = m.local_path || (
+      m.repo_path.startsWith('.aicontext/') ? m.repo_path : `.aicontext/${m.repo_path}`
+    )
+    const full = path.join(context.workspace, localRel)
+    return {
+      ...m,
+      path: localRel,
+      exists: fs.existsSync(full),
+      synced: null as null,
+    }
+  })
+
+  res.json({ mappings, entries })
 })
 
 // PUT /api/custom-dirs/:assistant

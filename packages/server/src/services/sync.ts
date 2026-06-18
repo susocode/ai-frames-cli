@@ -134,6 +134,9 @@ export async function pullResourcesRepo(context: Context): Promise<string> {
   const git = Object.keys(env).length > 0 ? g.env(env) : g
 
   logger.log(`sync: pulling ${context.resources_repo}`)
+  // Discard any local modifications and untracked files before pulling
+  await git.checkout('--', ['.'])
+  await git.clean('f', ['-d'])
   await git.pull()
   const log = await git.log({ maxCount: 1 })
   return log.latest?.hash ?? ''
@@ -155,7 +158,6 @@ export async function syncToWorkspace(
   const aicontextSrc = path.join(repoRoot, '.aicontext')
 
   if (!fs.existsSync(aicontextSrc)) {
-    // Repo has no .aicontext/ yet — just ensure all configured dirs exist locally
     if (enabledDirs && enabledDirs.length > 0) {
       for (const subdir of enabledDirs) {
         fs.mkdirSync(path.join(context.workspace, subdir), { recursive: true })
@@ -163,6 +165,15 @@ export async function syncToWorkspace(
       logger.log(`sync: repo has no .aicontext/, created ${enabledDirs.length} local dirs`)
     }
     return
+  }
+
+  // Always ensure base dirs exist in workspace (even if not in enabledDirs list)
+  const baseDirs = [
+    '.aicontext', '.aicontext/rules', '.aicontext/agents', '.aicontext/skills',
+    '.aicontext/prompts', '.aicontext/mcps', '.aicontext/contexts', '.aicontext/templates',
+  ]
+  for (const dir of baseDirs) {
+    fs.mkdirSync(path.join(context.workspace, dir), { recursive: true })
   }
 
   // Sync standard .aicontext subdirs

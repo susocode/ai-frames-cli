@@ -5,8 +5,11 @@ import AssistantsPage from './AssistantsPage'
 import RepositoriesPage from './RepositoriesPage'
 import SummaryPage from './SummaryPage'
 import WorkspacePage from './WorkspacePage'
+import MarketplacePage from './MarketplacePage'
+import TemplatesPage from './TemplatesPage'
 import { useLang } from '../i18n/LangContext'
 import LangSelector from '../components/LangSelector'
+import ThemeToggle from '../components/ThemeToggle'
 import ContextSettingsModal from '../components/ContextSettingsModal'
 
 interface Context {
@@ -94,6 +97,7 @@ export default function MainLayout() {
           </button>
         </div>
         <div className="topbar-right">
+          <ThemeToggle />
           <button
             className={`btn-sync ${syncState === 'updated' ? 'btn-saved' : ''}`}
             disabled={syncState === 'checking' || syncState === 'syncing'}
@@ -125,10 +129,9 @@ export default function MainLayout() {
           <NavLink to="/agents">{t.nav_agents}</NavLink>
           <NavLink to="/skills">{t.nav_skills}</NavLink>
           <NavLink to="/rules">{t.nav_rules}</NavLink>
-          <NavLink to="/hooks">{t.nav_hooks}</NavLink>
           <NavLink to="/prompts">{t.nav_prompts}</NavLink>
           <NavLink to="/mcps">{t.nav_mcps}</NavLink>
-          <NavLink to="/tools">{t.nav_tools}</NavLink>
+          <NavLink to="/contexts">{t.nav_contexts_res}</NavLink>
           <p className="nav-group">{t.nav_group_final}</p>
           <NavLink to="/summary">{t.nav_summary}</NavLink>
         </nav>
@@ -140,14 +143,13 @@ export default function MainLayout() {
             <Route path="/repositories" element={<RepositoriesPage />} />
             <Route path="/workspace" element={<WorkspacePage />} />
             <Route path="/summary" element={<SummaryPage />} />
-            <Route path="/templates" element={<div className="coming-soon">{t.coming_soon}</div>} />
-            <Route path="/agents" element={<div className="coming-soon">{t.coming_soon}</div>} />
-            <Route path="/skills" element={<div className="coming-soon">{t.coming_soon}</div>} />
-            <Route path="/rules" element={<div className="coming-soon">{t.coming_soon}</div>} />
-            <Route path="/hooks" element={<div className="coming-soon">{t.coming_soon}</div>} />
-            <Route path="/prompts" element={<div className="coming-soon">{t.coming_soon}</div>} />
-            <Route path="/mcps" element={<div className="coming-soon">{t.coming_soon}</div>} />
-            <Route path="/tools" element={<div className="coming-soon">{t.coming_soon}</div>} />
+            <Route path="/templates" element={<TemplatesPage />} />
+            <Route path="/rules"    element={<MarketplacePage type="rules"    title={t.nav_rules}        subtitle={t.overview_rules_desc} />} />
+            <Route path="/agents"   element={<MarketplacePage type="agents"   title={t.nav_agents}       subtitle={t.overview_agents_desc} />} />
+            <Route path="/skills"   element={<MarketplacePage type="skills"   title={t.nav_skills}       subtitle={t.overview_skills_desc} />} />
+            <Route path="/prompts"  element={<MarketplacePage type="prompts"  title={t.nav_prompts}      subtitle={t.overview_prompts_desc} />} />
+            <Route path="/mcps"     element={<MarketplacePage type="mcps"     title={t.nav_mcps}         subtitle={t.overview_mcps_desc} />} />
+            <Route path="/contexts" element={<MarketplacePage type="contexts" title={t.nav_contexts_res} subtitle={t.overview_aicontext_desc} />} />
             <Route path="*" element={<div className="coming-soon">{t.coming_soon}</div>} />
           </Routes>
         </section>

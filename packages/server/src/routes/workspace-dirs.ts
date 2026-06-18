@@ -4,6 +4,8 @@ import path from 'path'
 import os from 'os'
 import { parse } from 'yaml'
 import { getActiveContext } from '../services/config.js'
+import { loadAssistants } from './assistants.js'
+import { loadSelections, Selections, ResourceType } from '../services/selections.js'
 import { catchError, errorResponse } from '../utils/errors.js'
 import { logger } from '../utils/logger.js'
 
@@ -14,16 +16,55 @@ function getRepoDir(id: string) {
   return path.join(CONTEXTS_DIR, id, 'repo', '.aicontext')
 }
 
-function isSynced(wsPath: string, repoDir: string, rel: string): boolean {
-  if (!fs.existsSync(repoDir)) return true // no repo cloned yet — don't show as outdated
-  const repoSubdir = rel.replace(/^\.aicontext\/?/, '')
-  const repoPath = path.join(repoDir, repoSubdir || '.')
-  if (!fs.existsSync(repoPath)) return true // not in repo — not applicable
-  // Compare mtimes: if workspace dir is older than repo dir, it may be outdated
+function isSynced(wsPath: string, repoDir: string, rel: string, selections: Selections): boolean {
+  if (!fs.existsSync(repoDir)) return true
+
+  // Extract resource type and optional subdir (e.g. '.aicontext/skills/.claude' → type=skills, sub='.claude')
+  const parts = rel.replace(/^\.aicontext\/?/, '').split('/').filter(Boolean)
+  const type = parts[0] as ResourceType
+  const sub = parts[1] // e.g. '.claude', '.copilot' or undefined
+
+  if (!type) return true
+
+  const typeSelections = selections[type] ?? []
+  if (typeSelections.length === 0) return true
+
+  // For assistant subdirs (e.g. .aicontext/skills/.claude):
+  // only show outdated if there are selections in that specific subdir
+  if (sub) {
+    const subSelections = typeSelections.filter(s => s.startsWith(sub + '/'))
+    if (subSelections.length === 0) return true
+
+    const repoTypeDir = path.join(repoDir, type)
+    try {
+      for (const selected of subSelections) {
+        const repoFile = path.join(repoTypeDir, selected)
+        const wsFile = path.join(wsPath, '..', selected.replace(/^[^/]+\//, sub + '/'))
+        if (!fs.existsSync(repoFile)) continue
+        if (!fs.existsSync(wsFile)) return false
+        if (fs.statSync(repoFile).mtimeMs > fs.statSync(wsFile).mtimeMs) return false
+      }
+      return true
+    } catch { return true }
+  }
+
+  // For top-level type dirs (e.g. .aicontext/skills):
+  // check only the flat (non-subdir) selected files
+  const flatSelections = typeSelections.filter(s => !s.includes('/'))
+  if (flatSelections.length === 0) return true
+
+  const repoTypeDir = path.join(repoDir, type)
+  if (!fs.existsSync(repoTypeDir)) return true
+
   try {
-    const wsStat = fs.statSync(wsPath)
-    const repoStat = fs.statSync(repoPath)
-    return wsStat.mtimeMs >= repoStat.mtimeMs
+    for (const selected of flatSelections) {
+      const repoFile = path.join(repoTypeDir, selected)
+      const wsFile = path.join(wsPath, selected)
+      if (!fs.existsSync(repoFile)) continue
+      if (!fs.existsSync(wsFile)) return false
+      if (fs.statSync(repoFile).mtimeMs > fs.statSync(wsFile).mtimeMs) return false
+    }
+    return true
   } catch {
     return true
   }
@@ -39,7 +80,9 @@ export const BASE_DIRS = [
   '.aicontext/skills',
   '.aicontext/prompts',
   '.aicontext/mcps',
-  '.aicontext/memory',
+
+  '.aicontext/contexts',
+  '.aicontext/templates',
 ]
 
 // Per-assistant subdirs inside .aicontext/ + their native workspace dirs
@@ -107,6 +150,25 @@ const EXPECTED_DIRS = [
   ...Object.values(ASSISTANT_DIRS).flatMap(a => [...a.aicontext, ...a.native]),
 ]
 
+// Build aicontext dirs for any assistant given its prefix
+export function buildAicontextDirs(prefix: string): string[] {
+  return [
+    `.aicontext/rules/${prefix}`,
+    `.aicontext/agents/${prefix}`,
+    `.aicontext/skills/${prefix}`,
+    `.aicontext/prompts/${prefix}`,
+  ]
+}
+
+// Get dirs for an assistant — uses static config if known, builds from prefix otherwise
+export function getAssistantDirs(id: string, prefix: string): { aicontext: string[]; native: string[] } {
+  if (ASSISTANT_DIRS[id]) return ASSISTANT_DIRS[id]
+  return {
+    aicontext: buildAicontextDirs(prefix),
+    native: [],
+  }
+}
+
 // GET /api/workspace-dirs — check status of each expected directory
 workspaceDirsRouter.get('/', (_req, res) => {
   const context = getActiveContext()
@@ -117,6 +179,7 @@ workspaceDirsRouter.get('/', (_req, res) => {
 
   const ws = context.workspace
   const repoDir = getRepoDir(context.id)
+  const selections = loadSelections(context.id)
 
   function dirEntry(rel: string) {
     const full = path.join(ws, rel)
@@ -124,21 +187,32 @@ workspaceDirsRouter.get('/', (_req, res) => {
     return {
       path: rel,
       exists,
-      synced: exists ? isSynced(full, repoDir, rel) : null,
+      synced: exists ? isSynced(full, repoDir, rel, selections) : null,
     }
   }
 
   const base = BASE_DIRS.map(dirEntry)
 
+  // Load assistant config (includes custom assistants added by user)
+  const configuredAssistants = loadAssistants(context.id)
+
   const assistants: Record<string, { aicontext: ReturnType<typeof dirEntry>[]; native: ReturnType<typeof dirEntry>[]; in_repo: boolean }> = {}
   for (const [id, { aicontext, native }] of Object.entries(ASSISTANT_DIRS)) {
-    // Check if this assistant's aicontext dirs exist in the cloned repo
-    const firstAicontext = aicontext[0]
+    // Enrich with prefix from assistants config if available
+    const cfg = configuredAssistants.find(a => a.id === id)
+    const prefix = cfg?.prefix ?? `.${id}`
+    const aicontextDirs = aicontext.length > 0 ? aicontext : [
+      `.aicontext/rules/${prefix}`,
+      `.aicontext/agents/${prefix}`,
+      `.aicontext/skills/${prefix}`,
+      `.aicontext/prompts/${prefix}`,
+    ]
+    const firstAicontext = aicontextDirs[0]
     const inRepo = firstAicontext
       ? fs.existsSync(path.join(repoDir, firstAicontext.replace(/^\.aicontext\//, '')))
       : false
     assistants[id] = {
-      aicontext: aicontext.map(dirEntry),
+      aicontext: aicontextDirs.map(dirEntry),
       native: native.map(dirEntry),
       in_repo: inRepo,
     }
@@ -172,14 +246,14 @@ workspaceDirsRouter.get('/', (_req, res) => {
 
 // POST /api/workspace-dirs/assistant — enable (create) or disable (remove) dirs for one assistant
 workspaceDirsRouter.post('/assistant', (req, res) => {
-  const { assistant, enable } = req.body as { assistant: string; enable: boolean }
+  const { assistant, enable, prefix } = req.body as { assistant: string; enable: boolean; prefix?: string }
   const context = getActiveContext()
   if (!context) { errorResponse(res, 'context-not-found', 404); return }
-  if (!ASSISTANT_DIRS[assistant]) { errorResponse(res, 'invalid-input'); return }
 
   try {
     const ws = context.workspace
-    const { aicontext, native } = ASSISTANT_DIRS[assistant]
+    const resolvedPrefix = prefix ?? `.${assistant}`
+    const { aicontext } = getAssistantDirs(assistant, resolvedPrefix)
     // Only create/remove aicontext subdirs — native dirs (.claude, .github etc)
     // are managed by the assistant itself, not by ai-frames
     const allDirs = aicontext
@@ -197,10 +271,10 @@ workspaceDirsRouter.post('/assistant', (req, res) => {
         const full = path.join(ws, rel)
         if (fs.existsSync(full)) {
           try {
-            fs.rmdirSync(full)
+            fs.rmSync(full, { recursive: true, force: true })
             logger.log(`workspace-dirs: removed ${rel}`)
-          } catch {
-            logger.log(`workspace-dirs: skipped non-empty ${rel}`)
+          } catch (e) {
+            logger.log(`workspace-dirs: failed to remove ${rel}: ${e}`)
           }
         }
       }

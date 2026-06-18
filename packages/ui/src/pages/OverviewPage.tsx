@@ -42,13 +42,12 @@ export default function OverviewPage() {
         <p className="overview-section-label">{t.overview_section_resources}</p>
         <div className="overview-grid">
           <Card title={t.overview_templates_title} desc={t.overview_templates_desc} to="/templates" comingSoon />
-          <Card title={t.overview_agents_title} desc={t.overview_agents_desc} to="/agents" comingSoon />
-          <Card title={t.overview_skills_title} desc={t.overview_skills_desc} to="/skills" comingSoon />
-          <Card title={t.overview_rules_title} desc={t.overview_rules_desc} to="/rules" comingSoon />
-          <Card title={t.overview_hooks_title} desc={t.overview_hooks_desc} to="/hooks" comingSoon />
-          <Card title={t.overview_prompts_title} desc={t.overview_prompts_desc} to="/prompts" comingSoon />
-          <Card title={t.overview_mcps_title} desc={t.overview_mcps_desc} to="/mcps" comingSoon />
-          <Card title={t.overview_tools_title} desc={t.overview_tools_desc} to="/tools" comingSoon />
+          <Card title={t.overview_agents_title} desc={t.overview_agents_desc} to="/agents" />
+          <Card title={t.overview_skills_title} desc={t.overview_skills_desc} to="/skills" />
+          <Card title={t.overview_rules_title} desc={t.overview_rules_desc} to="/rules" />
+          <Card title={t.overview_prompts_title} desc={t.overview_prompts_desc} to="/prompts" />
+          <Card title={t.overview_mcps_title} desc={t.overview_mcps_desc} to="/mcps" />
+          <Card title={t.nav_contexts_res} desc={t.overview_aicontext_desc} to="/contexts" />
         </div>
       </div>
 

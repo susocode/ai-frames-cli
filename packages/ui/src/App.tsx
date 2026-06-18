@@ -3,6 +3,7 @@ import { Routes, Route, Navigate, useNavigate, useLocation } from 'react-router-
 import SetupWizard from './pages/SetupWizard'
 import MainLayout from './pages/MainLayout'
 import LangSelector from './components/LangSelector'
+import ThemeToggle from './components/ThemeToggle'
 import { useLang } from './i18n/LangContext'
 
 interface BootState {
@@ -57,6 +58,7 @@ export default function App() {
     <>
       {(state.setup_required || location.pathname === '/setup') && (
         <div className="lang-fixed">
+          <ThemeToggle />
           <LangSelector />
         </div>
       )}

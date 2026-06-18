@@ -1,6 +1,8 @@
 import { useEffect, useState, useCallback } from 'react'
 import { useLang } from '../i18n/LangContext'
 import AssistantCard from '../components/AssistantCard'
+import DirHint from '../components/DirHint'
+import CustomMappings from '../components/CustomMappings'
 
 interface DirEntry { path: string; exists: boolean; synced: boolean | null }
 interface AssistantDirs { aicontext: DirEntry[]; native: DirEntry[]; in_repo: boolean }
@@ -18,12 +20,7 @@ type RecreateState = 'idle' | 'recreating' | 'done' | 'error'
 type InitState = 'idle' | 'initializing' | 'done'
 type SaveState = 'idle' | 'saving' | 'saved'
 
-const ASSISTANT_GROUPS: { id: string; label: string }[] = [
-  { id: 'claude',   label: 'Claude Code' },
-  { id: 'copilot',  label: 'GitHub Copilot' },
-  { id: 'cursor',   label: 'Cursor' },
-  { id: 'windsurf', label: 'Windsurf' },
-]
+interface AssistantGroup { id: string; label: string; prefix: string; enabled: boolean }
 
 export default function WorkspacePage() {
   const { t } = useLang()
@@ -34,23 +31,29 @@ export default function WorkspacePage() {
   const [loadingDirs, setLoadingDirs] = useState(true)
   const [recreateState, setRecreateState] = useState<RecreateState>('idle')
   const [saveState, setSaveState] = useState<SaveState>('idle')
+  const [assistantGroups, setAssistantGroups] = useState<AssistantGroup[]>([])
+  const [assistantSelections, setAssistantSelections] = useState<Record<string, boolean>>({})
   const [selected, setSelected] = useState<Set<string>>(new Set())
   const [originalSelected, setOriginalSelected] = useState<Set<string>>(new Set())
   const [mappings, setMappings] = useState<DirMapping[]>([])
   const [mappingSaving, setMappingSaving] = useState(false)
-  const [newRepo, setNewRepo] = useState('')
-  const [newLocal, setNewLocal] = useState('')
 
   const loadDirs = useCallback(async () => {
     setLoadingDirs(true)
-    const res = await fetch('/api/workspace-dirs')
-    const d: WorkspaceData = await res.json()
+    const [dirsRes, assistRes, selRes] = await Promise.all([
+      fetch('/api/workspace-dirs').then(r => r.json()),
+      fetch('/api/assistants').then(r => r.json()),
+      fetch('/api/assistants/selections').then(r => r.json()),
+    ])
+    setAssistantSelections(selRes.selections ?? {})
+    const d: WorkspaceData = dirsRes
+    const groups: AssistantGroup[] = assistRes.assistants ?? []
     setData(d)
-    const enabled = new Set<string>()
-    for (const group of ASSISTANT_GROUPS) {
-      const a = d.assistants[group.id]
-      if (a?.aicontext.length > 0 && a.aicontext[0].exists) enabled.add(group.id)
-    }
+    setAssistantGroups(groups)
+    // Enabled = persisted in assistants.yaml OR dirs exist in workspace
+    const enabled = new Set<string>(
+      groups.filter(g => g.enabled || (d.assistants[g.id]?.aicontext[0]?.exists ?? false)).map(g => g.id)
+    )
     setSelected(new Set(enabled))
     setOriginalSelected(new Set(enabled))
     setLoadingDirs(false)
@@ -66,18 +69,6 @@ export default function WorkspacePage() {
     const res = await fetch('/api/workspace-dirs')
     const d: WorkspaceData = await res.json()
     setData(prev => prev ? { ...prev, custom: d.custom } : d)
-  }
-
-  async function addMapping() {
-    if (!newRepo.trim()) return
-    setMappingSaving(true)
-    const newEntry: DirMapping = { repo_path: newRepo.trim(), local_path: newLocal.trim() }
-    const updated = [...mappings, newEntry]
-    setMappings(updated)
-    setNewRepo('')
-    setNewLocal('')
-    await persistMappings(updated)
-    setMappingSaving(false)
   }
 
   async function removeMapping(i: number) {
@@ -112,22 +103,22 @@ export default function WorkspacePage() {
 
   const baseAllOk = data?.base.every(d => d.exists) ?? false
 
-  const normalizedNewRepo = newRepo.trim()
-  const normalizedNewLocal = newLocal.trim() || (
-    normalizedNewRepo.startsWith('.aicontext/')
-      ? normalizedNewRepo
-      : `.aicontext/${normalizedNewRepo}`
-  )
-  const isDuplicate = !!normalizedNewRepo && mappings.some(
-    m => m.repo_path === normalizedNewRepo || m.local_path === normalizedNewLocal
-  )
   const hasMissing = data?.base.some(d => !d.exists) ?? false
   const hasChanges = [...selected].sort().join() !== [...originalSelected].sort().join()
 
   function toggle(id: string) {
+    const isCurrentlySelected = selected.has(id)
+    if (isCurrentlySelected && assistantSelections[id] === true) {
+      const confirmed = window.confirm(t.assistant_has_selections)
+      if (!confirmed) return
+    }
     setSelected(prev => {
       const next = new Set(prev)
-      next.has(id) ? next.delete(id) : next.add(id)
+      if (next.has(id)) {
+        next.delete(id)
+      } else {
+        next.add(id)
+      }
       return next
     })
   }
@@ -143,17 +134,26 @@ export default function WorkspacePage() {
 
   async function saveChanges() {
     setSaveState('saving')
-    for (const group of ASSISTANT_GROUPS) {
+    for (const group of assistantGroups) {
       const wasEnabled = originalSelected.has(group.id)
       const nowEnabled = selected.has(group.id)
       if (wasEnabled !== nowEnabled) {
         await fetch('/api/workspace-dirs/assistant', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ assistant: group.id, enable: nowEnabled }),
+          body: JSON.stringify({ assistant: group.id, prefix: group.prefix, enable: nowEnabled }),
         })
       }
     }
+    // Persist enabled state to assistants.yaml
+    const updated = assistantGroups.map(g => ({ ...g, enabled: selected.has(g.id) }))
+    await fetch('/api/assistants', {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(updated),
+    })
+    setAssistantGroups(updated)
+    setOriginalSelected(new Set(selected))
     await loadDirs()
     setSaveState('saved')
     setTimeout(() => setSaveState('idle'), 2000)
@@ -206,10 +206,7 @@ export default function WorkspacePage() {
           {/* Base .aicontext structure */}
           <div className="workspace-group">
             <div className="workspace-group-header">
-              <span className="workspace-group-label">ai-frames (.aicontext/)</span>
-              <span className={`workspace-badge ${baseAllOk ? 'ok' : 'missing'}`}>
-                {baseAllOk ? t.workspace_status_ok : t.workspace_status_missing}
-              </span>
+              <span className="workspace-group-label">.aicontext/</span>
             </div>
             <table className="repo-table workspace-table">
               <thead>
@@ -222,7 +219,10 @@ export default function WorkspacePage() {
               <tbody>
                 {data?.base.map(d => (
                   <tr key={d.path}>
-                    <td className="source">{d.path}</td>
+                    <td className="source">
+                      {d.path}
+                      <DirHint dirPath={d.path} />
+                    </td>
                     <td style={{ textAlign: 'right' }}>
                       <span className={`workspace-status ${d.exists ? 'ok' : 'missing'}`}>
                         {d.exists ? `✓ ${t.workspace_status_ok}` : `✕ ${t.workspace_status_missing}`}
@@ -241,94 +241,49 @@ export default function WorkspacePage() {
             </table>
           </div>
 
-          {/* Custom directory mappings */}
+          {/* Custom mappings */}
           <div className="custom-dirs-section">
-            <h4 className="custom-dirs-title">{t.workspace_custom_dirs_title}</h4>
-            <p className="custom-dirs-subtitle">{t.workspace_custom_dirs_subtitle}</p>
-
-            {/* Saved mappings table */}
-            {(data?.custom ?? []).length > 0 && (
-              <table className="repo-table workspace-table" style={{ marginBottom: 12 }}>
-                <thead>
-                  <tr>
-                    <th style={{ textAlign: 'left' }}>{t.workspace_custom_repo_path}</th>
-                    <th style={{ textAlign: 'left' }}>{t.workspace_custom_local_path}</th>
-                    <th style={{ textAlign: 'right', width: 90 }}>{t.workspace_col_status}</th>
-                    <th style={{ textAlign: 'right', width: 110 }}>Sync</th>
-                    <th style={{ width: 70 }}></th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {(data?.custom ?? []).map((d, i) => (
-                    <tr key={d.local_path}>
-                      <td className="source">{d.repo_path}</td>
-                      <td className="source">{d.local_path}</td>
-                      <td style={{ textAlign: 'right' }}>
-                        <span className={`workspace-status ${d.exists ? 'ok' : 'missing'}`}>
-                          {d.exists ? `✓ ${t.workspace_status_ok}` : `✕ ${t.workspace_status_missing}`}
-                        </span>
-                      </td>
-                      <td style={{ textAlign: 'right' }}>
-                        {d.exists && d.synced !== null && (
-                          <span className={`workspace-status ${d.synced ? 'ok' : 'outdated'}`}>
-                            {d.synced ? `✓ ${t.workspace_status_synced}` : `⚠ ${t.workspace_status_outdated}`}
-                          </span>
-                        )}
-                      </td>
-                      <td style={{ textAlign: 'right' }}>
-                        <button className="btn-danger custom-dirs-remove" onClick={() => removeMapping(i)}>
-                          {t.workspace_custom_remove}
-                        </button>
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            )}
-
-            {/* Add new mapping */}
-            <div className="custom-dirs-row">
-              <input
-                className="custom-dirs-input"
-                placeholder={t.workspace_custom_repo_placeholder}
-                value={newRepo}
-                onChange={e => { setNewRepo(e.target.value) }}
-              />
-              <span className="custom-dirs-arrow">→</span>
-              <input
-                className="custom-dirs-input"
-                placeholder={newRepo.trim()
-                  ? newRepo.trim().startsWith('.aicontext/')
-                    ? newRepo.trim()
-                    : `.aicontext/${newRepo.trim()}`
-                  : t.workspace_custom_local_placeholder}
-                value={newLocal}
-                onChange={e => setNewLocal(e.target.value)}
-              />
-              <button
-                className="btn-primary"
-                disabled={!newRepo.trim() || mappingSaving || isDuplicate}
-                onClick={addMapping}
-              >
-                {mappingSaving ? t.workspace_custom_saving : t.workspace_custom_save}
-              </button>
-            </div>
-            {isDuplicate && (
-              <small className="hint-error" style={{ marginTop: 4 }}>✕ {t.workspace_custom_duplicate}</small>
-            )}
+            <CustomMappings
+              mappings={mappings}
+              savedEntries={data?.custom ?? []}
+              saving={mappingSaving}
+              onAdd={async (repo, local) => {
+                setMappingSaving(true)
+                const updated = [...mappings, { repo_path: repo, local_path: local }]
+                await persistMappings(updated)
+                setMappingSaving(false)
+              }}
+              onRemove={async (i, localPath, exists) => {
+                if (exists) {
+                  await fetch('/api/custom-dirs/local', {
+                    method: 'DELETE',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ local_path: localPath }),
+                  })
+                }
+                await removeMapping(i)
+              }}
+            />
           </div>
 
           {/* Assistants */}
           <div className="workspace-section-divider" />
           <h3 className="workspace-section-title">{t.assistants_title}</h3>
-          <p className="page-subtitle" style={{ marginBottom: 16 }}>{t.assistants_subtitle}</p>
+          <p className="page-subtitle">{t.assistants_subtitle}</p>
+          <div className="assistants-info-banner">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={{ flexShrink: 0, marginTop: 1 }}>
+              <circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/>
+            </svg>
+            <span>{t.assistants_section_info}</span>
+          </div>
 
           <div className="assistant-select-list">
-            {ASSISTANT_GROUPS.map(group => (
+            {assistantGroups.map(group => (
               <AssistantCard
                 key={group.id}
                 id={group.id}
                 label={group.label}
+                prefix={group.prefix}
                 isSelected={selected.has(group.id)}
                 dirs={data?.assistants[group.id]?.aicontext ?? []}
                 inRepo={data?.assistants[group.id]?.in_repo ?? false}
@@ -339,18 +294,20 @@ export default function WorkspacePage() {
             ))}
           </div>
 
-          {hasChanges && (
+          <div className="marketplace-footer visible">
+            <span className="marketplace-footer-count">
+              {selected.size} {t.assistants_title.toLowerCase()}
+            </span>
             <button
               className={`btn-primary ${saveState === 'saved' ? 'btn-saved' : ''}`}
-              style={{ marginTop: 20 }}
-              disabled={saveState === 'saving'}
+              disabled={saveState === 'saving' || !hasChanges}
               onClick={saveChanges}
             >
               {saveState === 'saving' ? t.assistant_toggling
                 : saveState === 'saved' ? t.workspace_recreate_done
                 : t.context_settings_save}
             </button>
-          )}
+          </div>
         </>
       ))}
     </div>
