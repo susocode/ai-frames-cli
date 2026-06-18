@@ -1,0 +1,29 @@
+packages/ui/src/pages/MarketplacePage.tsx
+  s_9113977bc81814::t_a60861a2e54da9 143
+packages/ui/src/index.css
+  s_9113977bc81814::t_a60861a2e54da9 299-300,363,365,369,371-373,377-380,384-498,502-504,507,510-511,814
+packages/ui/src/pages/WorkspacePage.tsx
+  s_9113977bc81814::t_a60861a2e54da9 297
+packages/ui/src/pages/TemplatesPage.tsx
+  s_9113977bc81814::t_a60861a2e54da9 156
+packages/ui/src/pages/MainLayout.tsx
+  s_9113977bc81814::t_a60861a2e54da9 35-41,82-97,143-148,150-158,160-188,190-198,209-214
+packages/ui/src/components/LangSelector.tsx
+  s_9113977bc81814::t_a60861a2e54da9 2,9-11,15,21-32,36-37,43,45-46,51-52,57-58
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.5.6",
+  "base_commit_sha": "94bbfa20db52361c3659808ec6a6aad1d5b2e92c",
+  "prompts": {},
+  "sessions": {
+    "s_9113977bc81814": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "339d2254-fb1c-44c1-8f08-8971f7e77fb7",
+        "model": "claude-sonnet-4-6"
+      },
+      "human_author": "Juan Sebastian Suaza Solano <juansss@ext.inditex.com>"
+    }
+  }
+}
