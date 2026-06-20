@@ -7,18 +7,18 @@ on:
 
 jobs:
   # ─── Build one binary per platform ──────────────────────────────────────────
+  # macos-13 (Intel) is deprecated on GitHub Actions — darwin-x64 is
+  # cross-compiled from the ARM64 runner instead. Bun supports JS cross-
+  # compilation; keytar.node is only bundled for the native arch (arm64).
   build:
     name: Build (${{ matrix.target }})
     strategy:
       fail-fast: false
       matrix:
         include:
-          - os: macos-latest   # Apple Silicon
+          - os: macos-latest
             target: macos-arm64
             bun_target: darwin-arm64
-          - os: macos-13       # Intel
-            target: macos-x64
-            bun_target: darwin-x64
           - os: ubuntu-latest
             target: linux-x64
             bun_target: linux-x64
@@ -43,15 +43,23 @@ jobs:
         run: cd packages/ui && bun run build
 
       # Bun compiles TypeScript directly — no tsc step needed
-      - name: Build binary
+      - name: Build binary (${{ matrix.target }})
         run: |
           bun build packages/server/src/index.ts \
             --compile \
             --target=bun-${{ matrix.bun_target }} \
             --outfile bin/ai-frames-${{ matrix.target }}
 
-      # Bundle keytar's native addon alongside the binary so Bun can load it
-      # at runtime (Bun --compile does not embed .node files automatically)
+      # Cross-compile darwin-x64 on the ARM64 runner (JS only — no keytar.node)
+      - name: Build binary (macos-x64 cross-compile)
+        if: matrix.target == 'macos-arm64'
+        run: |
+          bun build packages/server/src/index.ts \
+            --compile \
+            --target=bun-darwin-x64 \
+            --outfile bin/ai-frames-macos-x64
+
+      # Bundle keytar's native addon — only for the native arch, not cross-compiled
       - name: Bundle keytar native addon
         run: |
           KEYTAR_NODE=$(find node_modules/keytar/build -name '*.node' 2>/dev/null | head -1)
@@ -59,8 +67,8 @@ jobs:
             cp "$KEYTAR_NODE" bin/keytar-${{ matrix.target }}.node
           fi
 
-      # Tarball contains: binary (named "ai-frames") + keytar.node
-      - name: Create tarball
+      # Tarball contains: binary (named "ai-frames") + keytar.node if present
+      - name: Create tarball (${{ matrix.target }})
         run: |
           mkdir -p staging
           cp bin/ai-frames-${{ matrix.target }} staging/ai-frames
@@ -69,12 +77,30 @@ jobs:
           shasum -a 256 bin/ai-frames-${{ matrix.target }}.tar.gz \
             | awk '{print $1}' > bin/ai-frames-${{ matrix.target }}.sha256
 
+      - name: Create tarball (macos-x64 cross-compiled)
+        if: matrix.target == 'macos-arm64'
+        run: |
+          mkdir -p staging-x64
+          cp bin/ai-frames-macos-x64 staging-x64/ai-frames
+          tar -czf bin/ai-frames-macos-x64.tar.gz -C staging-x64 .
+          shasum -a 256 bin/ai-frames-macos-x64.tar.gz \
+            | awk '{print $1}' > bin/ai-frames-macos-x64.sha256
+
       - uses: actions/upload-artifact@v7
         with:
           name: dist-${{ matrix.target }}
           path: |
             bin/ai-frames-${{ matrix.target }}.tar.gz
             bin/ai-frames-${{ matrix.target }}.sha256
+
+      - name: Upload macos-x64 artifact (cross-compiled)
+        if: matrix.target == 'macos-arm64'
+        uses: actions/upload-artifact@v7
+        with:
+          name: dist-macos-x64
+          path: |
+            bin/ai-frames-macos-x64.tar.gz
+            bin/ai-frames-macos-x64.sha256
 
   # ─── Create GitHub Release ──────────────────────────────────────────────────
   release:
