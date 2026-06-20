@@ -1,6 +1,6 @@
 {
   "name": "@ai-frames/server",
-  "version": "0.1.1",
+  "version": "0.1.2",
   "description": "ai-frames server — API + static UI server",
   "main": "dist/index.js",
   "bin": {
