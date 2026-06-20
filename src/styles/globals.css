@@ -607,6 +607,15 @@ body {
   gap: 4px;
 }
 
+.sidebar-version {
+  width: 100%;
+  text-align: center;
+  font-size: 11px;
+  color: var(--text-muted);
+  padding-top: 6px;
+  letter-spacing: 0.02em;
+}
+
 .sidebar-collapsed .btn-theme-toggle,
 .sidebar-collapsed .lang-btn {
   width: 38px !important;
