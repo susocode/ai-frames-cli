@@ -1,210 +1,39 @@
 name: Release
 
 on:
-  repository_dispatch:
-    types: [release]
-  workflow_dispatch:
-    inputs:
-      version:
-        description: 'Tag to release (e.g. v0.1.3)'
-        required: true
+  push:
+    branches: [main]
 
-env:
-  RELEASE_VERSION: ${{ github.event.client_payload.version || inputs.version }}
+permissions:
+  contents: write
+  issues: write
+  pull-requests: write
+  id-token: write
 
 jobs:
-  # ─── Build one binary per platform ──────────────────────────────────────────
-  # macos-13 (Intel) is deprecated on GitHub Actions — darwin-x64 is
-  # cross-compiled from the ARM64 runner instead. Bun supports JS cross-
-  # compilation; keytar.node is only bundled for the native arch (arm64).
-  build:
-    name: Build (${{ matrix.target }})
-    strategy:
-      fail-fast: false
-      matrix:
-        include:
-          - os: macos-latest
-            target: macos-arm64
-            bun_target: darwin-arm64
-          - os: ubuntu-latest
-            target: linux-x64
-            bun_target: linux-x64
-
-    runs-on: ${{ matrix.os }}
-
-    steps:
-      - uses: actions/checkout@v7
-
-      - uses: oven-sh/setup-bun@v2
-        with:
-          bun-version: latest
-
-      # keytar needs libsecret headers to compile its native addon on Linux
-      - name: Install libsecret (Linux only)
-        if: runner.os == 'Linux'
-        run: sudo apt-get install -y libsecret-1-dev
-
-      - run: bun install
-
-      - name: Build UI
-        run: cd packages/ui && bun run build
-
-      # Bun compiles TypeScript directly — no tsc step needed
-      - name: Build binary (${{ matrix.target }})
-        run: |
-          bun build packages/server/src/index.ts \
-            --compile \
-            --target=bun-${{ matrix.bun_target }} \
-            --outfile bin/ai-frames-${{ matrix.target }}
-
-      # Cross-compile darwin-x64 on the ARM64 runner (JS only — no keytar.node)
-      - name: Build binary (macos-x64 cross-compile)
-        if: matrix.target == 'macos-arm64'
-        run: |
-          bun build packages/server/src/index.ts \
-            --compile \
-            --target=bun-darwin-x64 \
-            --outfile bin/ai-frames-macos-x64
-
-      # Bundle keytar's native addon — only for the native arch, not cross-compiled
-      - name: Bundle keytar native addon
-        run: |
-          KEYTAR_NODE=$(find node_modules/keytar/build -name '*.node' 2>/dev/null | head -1)
-          if [ -n "$KEYTAR_NODE" ]; then
-            cp "$KEYTAR_NODE" bin/keytar-${{ matrix.target }}.node
-          fi
-
-      # Tarball contains: binary + ui/ + keytar.node (if native arch)
-      - name: Create tarball (${{ matrix.target }})
-        run: |
-          mkdir -p staging
-          cp bin/ai-frames-${{ matrix.target }} staging/ai-frames
-          cp -r packages/ui/dist staging/ui
-          [ -f bin/keytar-${{ matrix.target }}.node ] && cp bin/keytar-${{ matrix.target }}.node staging/keytar.node
-          tar -czf bin/ai-frames-${{ matrix.target }}.tar.gz -C staging .
-          shasum -a 256 bin/ai-frames-${{ matrix.target }}.tar.gz \
-            | awk '{print $1}' > bin/ai-frames-${{ matrix.target }}.sha256
-
-      - name: Create tarball (macos-x64 cross-compiled)
-        if: matrix.target == 'macos-arm64'
-        run: |
-          mkdir -p staging-x64
-          cp bin/ai-frames-macos-x64 staging-x64/ai-frames
-          cp -r packages/ui/dist staging-x64/ui
-          tar -czf bin/ai-frames-macos-x64.tar.gz -C staging-x64 .
-          shasum -a 256 bin/ai-frames-macos-x64.tar.gz \
-            | awk '{print $1}' > bin/ai-frames-macos-x64.sha256
-
-      - uses: actions/upload-artifact@v7
-        with:
-          name: dist-${{ matrix.target }}
-          path: |
-            bin/ai-frames-${{ matrix.target }}.tar.gz
-            bin/ai-frames-${{ matrix.target }}.sha256
-
-      - name: Upload macos-x64 artifact (cross-compiled)
-        if: matrix.target == 'macos-arm64'
-        uses: actions/upload-artifact@v7
-        with:
-          name: dist-macos-x64
-          path: |
-            bin/ai-frames-macos-x64.tar.gz
-            bin/ai-frames-macos-x64.sha256
-
-  # ─── Create GitHub Release ──────────────────────────────────────────────────
   release:
-    name: Create GitHub Release
-    needs: build
+    name: Release
     runs-on: ubuntu-latest
-    permissions:
-      contents: write
 
     steps:
-      - uses: actions/checkout@v7
-
-      - uses: actions/download-artifact@v8
+      - name: Checkout
+        uses: actions/checkout@v4
         with:
-          path: dist
-          merge-multiple: true
+          fetch-depth: 0
+          persist-credentials: false
 
-      - name: Publish release
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Release
         env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        run: |
-          gh release create "${{ env.RELEASE_VERSION }}" \
-            dist/*.tar.gz \
-            dist/*.sha256 \
-            --title "${{ env.RELEASE_VERSION }}" \
-            --generate-notes
-
-  # ─── Update Homebrew tap ────────────────────────────────────────────────────
-  update-tap:
-    name: Update Homebrew tap
-    needs: release
-    runs-on: ubuntu-latest
-
-    steps:
-      - uses: actions/download-artifact@v8
-        with:
-          path: dist
-          merge-multiple: true
-
-      - uses: actions/checkout@v7
-        with:
-          repository: susocode/homebrew-tap
-          token: ${{ secrets.TAP_TOKEN }}
-          path: tap
-
-      - name: Regenerate formula
-        run: |
-          VERSION="${{ env.RELEASE_VERSION }}"
-          BARE="${VERSION#v}"
-          BASE="https://github.com/susocode/ai-frames-cli/releases/download/${VERSION}"
-          SHA_ARM64=$(cat dist/ai-frames-macos-arm64.sha256)
-          SHA_X64=$(cat  dist/ai-frames-macos-x64.sha256)
-          SHA_LINUX=$(cat dist/ai-frames-linux-x64.sha256)
-
-          mkdir -p tap/Formula
-          cat > tap/Formula/ai-frames.rb << FORMULA
-          class AiFrames < Formula
-            desc "Centralized AI context manager for multi-repo workspaces"
-            homepage "https://ai-frames.org"
-            version "${BARE}"
-
-            depends_on "openssl"
-
-            on_macos do
-              if Hardware::CPU.arm?
-                url "${BASE}/ai-frames-macos-arm64.tar.gz"
-                sha256 "${SHA_ARM64}"
-              else
-                url "${BASE}/ai-frames-macos-x64.tar.gz"
-                sha256 "${SHA_X64}"
-              end
-            end
-
-            on_linux do
-              url "${BASE}/ai-frames-linux-x64.tar.gz"
-              sha256 "${SHA_LINUX}"
-            end
-
-            def install
-              bin.install "ai-frames"
-              (share/"ai-frames").install "ui"
-              (lib/"ai-frames").install "keytar.node" if File.exist?("keytar.node")
-            end
-
-            test do
-              system "#{bin}/ai-frames", "--version"
-            end
-          end
-          FORMULA
-
-      - name: Commit and push
-        run: |
-          cd tap
-          git config user.name  "github-actions[bot]"
-          git config user.email "github-actions[bot]@users.noreply.github.com"
-          git add Formula/ai-frames.rb
-          git diff --cached --quiet || git commit -m "chore: update ai-frames to ${{ env.RELEASE_VERSION }}"
-          git push
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          NPM_TOKEN: ${{ secrets.NPM_TOKEN }}
+          TAP_TOKEN: ${{ secrets.TAP_TOKEN }}
+        run: npx semantic-release

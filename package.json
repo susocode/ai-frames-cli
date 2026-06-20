@@ -17,6 +17,9 @@
   "engines": {
     "node": ">=18"
   },
+  "publishConfig": {
+    "access": "public"
+  },
   "scripts": {
     "dev": "next dev --turbopack",
     "dev:server": "tsx watch server.ts",
@@ -39,9 +42,13 @@
     "yaml": "^2.5.0"
   },
   "devDependencies": {
+    "@semantic-release/changelog": "^6.0.3",
+    "@semantic-release/exec": "^7.1.0",
+    "@semantic-release/git": "^10.0.1",
     "@types/node": "^26.0.0",
     "@types/react": "^19.0.0",
     "@types/react-dom": "^19.0.0",
+    "semantic-release": "^25.0.5",
     "tailwindcss": "^4.1.0",
     "tsx": "^4.19.0",
     "typescript": "^6.0.3"
