@@ -1,9 +1,5 @@
-import fs from 'fs'
-import path from 'path'
-import { fileURLToPath } from 'url'
+import pkg from '../../package.json'
 
 export function readPackageJson(): { version: string; name: string } {
-  const __dirname = path.dirname(fileURLToPath(import.meta.url))
-  const pkgPath = path.resolve(__dirname, '../../package.json')
-  return JSON.parse(fs.readFileSync(pkgPath, 'utf8'))
+  return { version: pkg.version, name: pkg.name }
 }
