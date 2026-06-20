@@ -1,6 +1,6 @@
 {
   "name": "ai-frames",
-  "version": "0.3.0",
+  "version": "0.3.1",
   "description": "AI context manager for multi-repo workspaces",
   "type": "module",
   "main": "dist/index.js",
