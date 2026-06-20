@@ -8,7 +8,7 @@ const require = createRequire(import.meta.url)
 const PORT = process.env.PORT ? parseInt(process.env.PORT) : 3141
 
 export async function startServer(opts: { dev?: boolean; debug?: boolean } = {}) {
-  const isDev = opts.dev ?? process.env.NODE_ENV !== 'production'
+  const isDev = opts.dev ?? false
 
   const dir = resolve(dirname(fileURLToPath(import.meta.url)), '..')
   const next = require('next') as (opts: { dev: boolean; dir: string }) => { getRequestHandler: () => (req: any, res: any) => void; prepare: () => Promise<void> }
