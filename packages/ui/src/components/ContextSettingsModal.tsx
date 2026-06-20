@@ -214,7 +214,7 @@ export default function ContextSettingsModal({ context, onClose, onSaved }: Prop
               saveState === 'saving' ||
               !form.workspace.trim() ||
               !isAbsolutePath(form.workspace) ||
-              (form.ssh_key.trim() && !isAbsolutePath(form.ssh_key))
+              !!(form.ssh_key.trim() && !isAbsolutePath(form.ssh_key))
             }
             onClick={save}
           >

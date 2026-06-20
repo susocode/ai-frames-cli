@@ -5,7 +5,7 @@ import CustomMappings from './CustomMappings'
 
 interface DirEntry { path: string; exists: boolean; synced: boolean | null }
 interface DirMapping { repo_path: string; local_path: string }
-interface DirEntry { path: string; exists: boolean; synced: boolean | null; repo_path: string; local_path: string }
+interface CustomEntry extends DirEntry { repo_path: string; local_path: string }
 
 interface Props {
   id: string
@@ -27,7 +27,7 @@ export default function AssistantCard({ id, label, prefix, isSelected, dirs, inR
 
   // Custom mappings for this assistant
   const [mappings, setMappings] = useState<DirMapping[]>([])
-  const [entries, setEntries] = useState<DirEntry[]>([])
+  const [entries, setEntries] = useState<CustomEntry[]>([])
   const [mappingSaving, setMappingSaving] = useState(false)
 
   async function loadMappings() {

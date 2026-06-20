@@ -35,7 +35,7 @@ export default function App() {
   }, [])
 
   function handleSetupComplete() {
-    setState({ loading: false, setup_required: false })
+    setState({ loading: false, setup_required: false, error: false })
     navigate('/', { replace: true })
   }
 

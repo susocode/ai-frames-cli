@@ -12,7 +12,7 @@ interface ItemMeta {
 
 interface Props {
   type: string
-  title: string
+  title: React.ReactNode
   subtitle: string
 }
 
