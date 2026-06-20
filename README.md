@@ -43,7 +43,7 @@ Local workspace
 - **Marketplace** — browse and select rules, agents, skills, prompts and templates
 - **Templates** — install bundles of resources with one click
 - **Multi-provider** — GitHub, GitLab, Bitbucket
-- **Secure auth** — tokens stored in system keychain (never on disk)
+- **Secure auth** — tokens stored in `~/.ai-frames/contexts/<id>/.token` with `0600` permissions
 - **Per-assistant dirs** — enable Claude, Copilot, Cursor or Windsurf independently
 - **Custom mappings** — map any repo path to any local directory
 - **i18n** — English, Spanish, Polish
@@ -53,7 +53,6 @@ Local workspace
 ## Requirements
 
 - Node.js 18+
-- OpenSSL (for HTTPS in production)
 - Git
 
 ---
@@ -85,19 +84,8 @@ git clone https://github.com/susocode/ai-frames-cli.git
 cd ai-frames-cli
 npm install
 
-# Terminal 1 — API server
-npm run dev -w packages/server
-
-# Terminal 2 — UI (hot reload)
-npm run dev -w packages/ui
-```
-
-Open [http://localhost:5173](http://localhost:5173).
-
-For debug logging:
-
-```bash
-npm run dev:debug -w packages/server
+# Start dev server (hot reload on http://localhost:3000)
+npm run dev
 ```
 
 ---
@@ -106,17 +94,24 @@ npm run dev:debug -w packages/server
 
 ```
 ai-frames-cli/
-  packages/
-    server/          — Express API + git operations
-      src/
-        routes/      — REST endpoints
-        services/    — config, sync, keychain, installer
-        utils/       — logger, errors, tls, path helpers
-    ui/              — React + Vite frontend
-      src/
-        pages/       — Overview, AI Context, Repositories, Summary, ...
-        components/  — LangSelector, ContextSettingsModal, AssistantCard
-        i18n/        — EN / ES / PL translations
+  src/
+    app/
+      (dashboard)/       — dashboard pages (overview, workspace, marketplace…)
+      api/               — Next.js API route handlers
+      setup/             — setup wizard page
+      layout.tsx          — root layout (theme + i18n providers)
+      page.tsx            — boot page (redirects to /setup or /overview)
+    components/          — React components
+    i18n/                — EN / ES / PL translations
+    lib/
+      services/          — config, sync, marketplace, assistants
+      utils/             — errors, logger, repo helpers
+    styles/              — global CSS
+    theme/               — ThemeContext
+    utils/               — path and repo validation helpers
+  index.ts               — CLI entry point (commander)
+  server.ts              — HTTP server wrapping Next.js
+  next.config.ts
 ```
 
 ---
@@ -130,7 +125,8 @@ ai-frames clones your resources repo into `~/.ai-frames/contexts/<id>/repo/` and
   config.yaml
   contexts/
     <uuid>/
-      context.yaml        ← context config (no token)
+      context.yaml        ← context config
+      .token              ← access token (mode 0600, never committed)
       lock.yaml           ← { hash, synced_at }
       selections.yaml     ← which marketplace items to sync
       assistants.yaml     ← enabled assistants with their prefix
@@ -145,80 +141,23 @@ Pressing **Sync** in the UI:
 
 ---
 
-## Publishing via Homebrew
+## Releases
 
-Binaries are built with [`bun build --compile`](https://bun.sh/docs/bundler/executables) — no Node.js runtime bundled, ~40 MB per binary, TypeScript compiled directly.
+Releases are fully automated via [semantic-release](https://semantic-release.gitbook.io/). Every push to `main` that contains a `feat:` or `fix:` commit automatically:
 
-### Local build
+1. Bumps the version (`fix:` → patch, `feat:` → minor, `BREAKING CHANGE` → major)
+2. Updates `CHANGELOG.md`
+3. Publishes to npm
+4. Updates the Homebrew tap formula
+5. Creates a GitHub Release
 
-```bash
-# Prerequisites: Bun 1.1+ — https://bun.sh/install
-bun --version
+---
 
-# 1. Build the UI
-cd packages/ui && bun run build
-
-# 2. Compile the server into a standalone binary
-cd packages/server
-bun run build:binary:mac-arm   # → bin/ai-frames-macos-arm64
-bun run build:binary:mac-x64   # → bin/ai-frames-macos-x64
-bun run build:binary:linux     # → bin/ai-frames-linux-x64
-```
-
-### Native addon — keytar
-
-`keytar` uses a NAPI `.node` addon that Bun loads at runtime. `bun build --compile` does not embed `.node` files, so the release workflow copies `keytar.node` into the tarball alongside the binary. The Homebrew formula installs it to `lib/ai-frames/keytar.node`.
-
-Bun does not support cross-compilation for NAPI addons — each binary is compiled on its target OS runner (see the CI matrix below).
-
-### Step 1 — Create the Homebrew tap
-
-The tap lives at `susocode/homebrew-tap`. Structure:
-
-```
-homebrew-tap/
-  Formula/
-    ai-frames.rb   ← auto-updated by CI on every tag
-```
-
-The formula is regenerated automatically on each release — you never edit it by hand. The initial placeholder version is committed to the repo; the CI overwrites it with real SHA256 hashes on the first `git tag`.
-
-### Step 2 — Install on any Mac
+## Install via Homebrew
 
 ```bash
 brew tap susocode/tap
 brew install ai-frames
-
-# Launch
-ai-frames
-```
-
-To update after a new release:
-
-```bash
-brew upgrade ai-frames
-```
-
-### Step 3 — Release (automated via GitHub Actions)
-
-`.github/workflows/release.yml` runs on every `v*.*.*` tag push:
-
-1. Builds one binary per platform on its native OS runner (macOS ARM, macOS Intel, Linux x64)
-2. Bundles `keytar.node` alongside the binary and wraps everything in a `.tar.gz`
-3. Calculates SHA256 for each tarball
-4. Creates a GitHub Release and uploads all tarballs
-5. Regenerates `Formula/ai-frames.rb` in `susocode/homebrew-tap` with the new version and real SHA256 hashes
-
-**One-time setup required:**
-
-- Create a GitHub PAT with `repo` scope on `susocode/homebrew-tap`
-- Add it as `TAP_TOKEN` in the `ai-frames-cli` repository secrets (`Settings → Secrets → Actions`)
-
-To trigger a release:
-
-```bash
-git tag v0.1.0
-git push origin v0.1.0
 ```
 
 ---
@@ -230,9 +169,6 @@ git push origin v0.1.0
 - [ ] MCPs marketplace page
 - [ ] App Contexts page
 - [ ] Summary / Deploy page
-- [ ] npm package (`npm install -g ai-frames`)
-- [ ] Homebrew tap (`brew install susocode/tap/ai-frames`)
-- [ ] asdf plugin
 
 ---
 
