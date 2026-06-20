@@ -73,7 +73,7 @@ export default function AssistantCard({ id, label, prefix, isSelected, dirs, inR
               {hasMissingDirs && (
                 <div className="workspace-group-header" style={{ padding: '6px 12px' }}>
                   <span />
-                  <button className="btn-sm-outline" disabled={recreating} onClick={recreateMissingDirs}>
+                  <button className="btn-sm-warning" disabled={recreating} onClick={recreateMissingDirs}>
                     {recreating ? t.workspace_recreating : t.workspace_recreate_button}
                   </button>
                 </div>

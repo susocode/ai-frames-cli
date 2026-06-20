@@ -152,7 +152,7 @@ export default function WorkspacePage() {
             <div className="workspace-group-header">
               <span className="workspace-group-label">.aicontext/</span>
               {hasMissingBase && (
-                <button className="btn-sm-outline" disabled={recreating} onClick={recreateBaseDirs}>
+                <button className="btn-sm-warning" disabled={recreating} onClick={recreateBaseDirs}>
                   {recreating ? t.workspace_recreating : t.workspace_recreate_button}
                 </button>
               )}

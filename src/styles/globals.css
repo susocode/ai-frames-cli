@@ -1212,6 +1212,26 @@ body {
   cursor: default;
 }
 
+.btn-sm-warning {
+  font-size: 12px;
+  padding: 4px 10px;
+  border-radius: 6px;
+  border: 1px solid rgba(245, 158, 11, 0.5);
+  background: rgba(245, 158, 11, 0.08);
+  color: #f59e0b;
+  cursor: pointer;
+  white-space: nowrap;
+  transition: background 0.15s, border-color 0.15s;
+}
+.btn-sm-warning:hover:not(:disabled) {
+  background: rgba(245, 158, 11, 0.16);
+  border-color: #f59e0b;
+}
+.btn-sm-warning:disabled {
+  opacity: 0.5;
+  cursor: default;
+}
+
 /* Assistant selection list */
 .assistant-select-list {
   display: flex;
