@@ -1,6 +1,6 @@
 import http from 'http'
 import { createRequire } from 'module'
-import { dirname } from 'path'
+import { dirname, resolve } from 'path'
 import { fileURLToPath } from 'url'
 import open from 'open'
 
@@ -10,8 +10,7 @@ const PORT = process.env.PORT ? parseInt(process.env.PORT) : 3141
 export async function startServer(opts: { dev?: boolean; debug?: boolean } = {}) {
   const isDev = opts.dev ?? process.env.NODE_ENV !== 'production'
 
-  // dir must be the package root so Next.js finds .next/ when globally installed
-  const dir = dirname(fileURLToPath(import.meta.url))
+  const dir = resolve(dirname(fileURLToPath(import.meta.url)), '..')
   const next = require('next') as (opts: { dev: boolean; dir: string }) => { getRequestHandler: () => (req: any, res: any) => void; prepare: () => Promise<void> }
   const app = next({ dev: isDev, dir })
   const handle = app.getRequestHandler()
