@@ -147,104 +147,43 @@ Pressing **Sync** in the UI:
 
 ## Publishing via Homebrew
 
-### Why `pkg` for v0.1.0
+Binaries are built with [`bun build --compile`](https://bun.sh/docs/bundler/executables) — no Node.js runtime bundled, ~40 MB per binary, TypeScript compiled directly.
 
-We use [`pkg`](https://github.com/vercel/pkg) to bundle the Node.js runtime + app into a single executable. This is the safest option for a first release since it handles native dependencies (like `keytar`) correctly. We plan to migrate to `bun build --compile` in a future release for a smaller binary.
-
-### Step 1 — Add `pkg` and build scripts
+### Local build
 
 ```bash
-npm install -g pkg
+# Prerequisites: Bun 1.1+ — https://bun.sh/install
+bun --version
+
+# 1. Build the UI
+cd packages/ui && bun run build
+
+# 2. Compile the server into a standalone binary
+cd packages/server
+bun run build:binary:mac-arm   # → bin/ai-frames-macos-arm64
+bun run build:binary:mac-x64   # → bin/ai-frames-macos-x64
+bun run build:binary:linux     # → bin/ai-frames-linux-x64
 ```
 
-Add to `packages/server/package.json`:
+### Native addon — keytar
 
-```json
-"scripts": {
-  "build:binary:mac-arm": "pkg dist/index.js --target node18-macos-arm64 --output ../../bin/ai-frames-macos-arm64",
-  "build:binary:mac-x64": "pkg dist/index.js --target node18-macos-x64 --output ../../bin/ai-frames-macos-x64",
-  "build:binary:linux": "pkg dist/index.js --target node18-linux-x64 --output ../../bin/ai-frames-linux-x64"
-}
-```
+`keytar` uses a NAPI `.node` addon that Bun loads at runtime. `bun build --compile` does not embed `.node` files, so the release workflow copies `keytar.node` into the tarball alongside the binary. The Homebrew formula installs it to `lib/ai-frames/keytar.node`.
 
-Build UI first, then server, then binaries:
+Bun does not support cross-compilation for NAPI addons — each binary is compiled on its target OS runner (see the CI matrix below).
 
-```bash
-npm run build -w packages/ui     # copies dist to packages/ui/dist
-npm run build -w packages/server # compiles TypeScript
-npm run build:binary:mac-arm -w packages/server
-```
+### Step 1 — Create the Homebrew tap
 
-### Step 2 — Create a GitHub Release
-
-Tag the release and upload the binaries:
-
-```bash
-git tag v0.1.0
-git push origin v0.1.0
-
-# Using GitHub CLI
-gh release create v0.1.0 \
-  bin/ai-frames-macos-arm64 \
-  bin/ai-frames-macos-x64 \
-  bin/ai-frames-linux-x64 \
-  --title "v0.1.0" \
-  --notes "Initial release"
-```
-
-Get the SHA256 of each binary (needed for the formula):
-
-```bash
-shasum -a 256 bin/ai-frames-macos-arm64
-shasum -a 256 bin/ai-frames-macos-x64
-```
-
-### Step 3 — Create the Homebrew tap
-
-Create a public repo at `susocode/homebrew-tap` with this structure:
+The tap lives at `susocode/homebrew-tap`. Structure:
 
 ```
 homebrew-tap/
   Formula/
-    ai-frames.rb
+    ai-frames.rb   ← auto-updated by CI on every tag
 ```
 
-Contents of `ai-frames.rb`:
+The formula is regenerated automatically on each release — you never edit it by hand. The initial placeholder version is committed to the repo; the CI overwrites it with real SHA256 hashes on the first `git tag`.
 
-```ruby
-class AiFrames < Formula
-  desc "Centralized AI context manager for multi-repo workspaces"
-  homepage "https://ai-frames.org"
-  version "0.1.0"
-
-  depends_on "openssl"
-
-  on_macos do
-    if Hardware::CPU.arm?
-      url "https://github.com/susocode/ai-frames-cli/releases/download/v0.1.0/ai-frames-macos-arm64.tar.gz"
-      sha256 "<SHA256_ARM64>"
-    else
-      url "https://github.com/susocode/ai-frames-cli/releases/download/v0.1.0/ai-frames-macos-x64.tar.gz"
-      sha256 "<SHA256_X64>"
-    end
-  end
-
-  on_linux do
-    url "https://github.com/susocode/ai-frames-cli/releases/download/v0.1.0/ai-frames-linux-x64.tar.gz"
-    sha256 "<SHA256_LINUX>"
-  end
-
-  def install
-    bin.install "ai-frames"
-  end
-
-  test do
-    system "#{bin}/ai-frames", "--version"
-  end
-end
-```
-
-### Step 4 — Install on any Mac
+### Step 2 — Install on any Mac
 
 ```bash
 brew tap susocode/tap
@@ -260,9 +199,27 @@ To update after a new release:
 brew upgrade ai-frames
 ```
 
-### Step 5 — Automate with GitHub Actions (optional)
+### Step 3 — Release (automated via GitHub Actions)
 
-Add `.github/workflows/release.yml` to auto-build and publish binaries on every tag push. This ensures releases are always consistent and removes the manual build step.
+`.github/workflows/release.yml` runs on every `v*.*.*` tag push:
+
+1. Builds one binary per platform on its native OS runner (macOS ARM, macOS Intel, Linux x64)
+2. Bundles `keytar.node` alongside the binary and wraps everything in a `.tar.gz`
+3. Calculates SHA256 for each tarball
+4. Creates a GitHub Release and uploads all tarballs
+5. Regenerates `Formula/ai-frames.rb` in `susocode/homebrew-tap` with the new version and real SHA256 hashes
+
+**One-time setup required:**
+
+- Create a GitHub PAT with `repo` scope on `susocode/homebrew-tap`
+- Add it as `TAP_TOKEN` in the `ai-frames-cli` repository secrets (`Settings → Secrets → Actions`)
+
+To trigger a release:
+
+```bash
+git tag v0.1.0
+git push origin v0.1.0
+```
 
 ---
 

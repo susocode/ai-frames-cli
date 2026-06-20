@@ -1,0 +1,174 @@
+name: Release
+
+on:
+  push:
+    tags:
+      - 'v*.*.*'
+
+jobs:
+  # ─── Build one binary per platform ──────────────────────────────────────────
+  build:
+    name: Build (${{ matrix.target }})
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: macos-latest   # Apple Silicon
+            target: macos-arm64
+            bun_target: darwin-arm64
+          - os: macos-13       # Intel
+            target: macos-x64
+            bun_target: darwin-x64
+          - os: ubuntu-latest
+            target: linux-x64
+            bun_target: linux-x64
+
+    runs-on: ${{ matrix.os }}
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: latest
+
+      # keytar needs libsecret headers to compile its native addon on Linux
+      - name: Install libsecret (Linux only)
+        if: runner.os == 'Linux'
+        run: sudo apt-get install -y libsecret-1-dev
+
+      - run: bun install
+
+      - name: Build UI
+        run: cd packages/ui && bun run build
+
+      # Bun compiles TypeScript directly — no tsc step needed
+      - name: Build binary
+        run: |
+          bun build packages/server/src/index.ts \
+            --compile \
+            --target=bun-${{ matrix.bun_target }} \
+            --outfile bin/ai-frames-${{ matrix.target }}
+
+      # Bundle keytar's native addon alongside the binary so Bun can load it
+      # at runtime (Bun --compile does not embed .node files automatically)
+      - name: Bundle keytar native addon
+        run: |
+          KEYTAR_NODE=$(find node_modules/keytar/build -name '*.node' 2>/dev/null | head -1)
+          if [ -n "$KEYTAR_NODE" ]; then
+            cp "$KEYTAR_NODE" bin/keytar-${{ matrix.target }}.node
+          fi
+
+      # Tarball contains: binary (named "ai-frames") + keytar.node
+      - name: Create tarball
+        run: |
+          mkdir -p staging
+          cp bin/ai-frames-${{ matrix.target }} staging/ai-frames
+          [ -f bin/keytar-${{ matrix.target }}.node ] && cp bin/keytar-${{ matrix.target }}.node staging/keytar.node
+          tar -czf bin/ai-frames-${{ matrix.target }}.tar.gz -C staging .
+          shasum -a 256 bin/ai-frames-${{ matrix.target }}.tar.gz \
+            | awk '{print $1}' > bin/ai-frames-${{ matrix.target }}.sha256
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: dist-${{ matrix.target }}
+          path: |
+            bin/ai-frames-${{ matrix.target }}.tar.gz
+            bin/ai-frames-${{ matrix.target }}.sha256
+
+  # ─── Create GitHub Release ──────────────────────────────────────────────────
+  release:
+    name: Create GitHub Release
+    needs: build
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/download-artifact@v4
+        with:
+          path: dist
+          merge-multiple: true
+
+      - name: Publish release
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          gh release create "${{ github.ref_name }}" \
+            dist/*.tar.gz \
+            dist/*.sha256 \
+            --title "${{ github.ref_name }}" \
+            --generate-notes
+
+  # ─── Update Homebrew tap ────────────────────────────────────────────────────
+  update-tap:
+    name: Update Homebrew tap
+    needs: release
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          path: dist
+          merge-multiple: true
+
+      - uses: actions/checkout@v4
+        with:
+          repository: susocode/homebrew-tap
+          token: ${{ secrets.TAP_TOKEN }}
+          path: tap
+
+      - name: Regenerate formula
+        run: |
+          VERSION="${{ github.ref_name }}"
+          BARE="${VERSION#v}"
+          BASE="https://github.com/susocode/ai-frames-cli/releases/download/${VERSION}"
+          SHA_ARM64=$(cat dist/ai-frames-macos-arm64.sha256)
+          SHA_X64=$(cat  dist/ai-frames-macos-x64.sha256)
+          SHA_LINUX=$(cat dist/ai-frames-linux-x64.sha256)
+
+          mkdir -p tap/Formula
+          cat > tap/Formula/ai-frames.rb << FORMULA
+          class AiFrames < Formula
+            desc "Centralized AI context manager for multi-repo workspaces"
+            homepage "https://ai-frames.org"
+            version "${BARE}"
+
+            depends_on "openssl"
+
+            on_macos do
+              if Hardware::CPU.arm?
+                url "${BASE}/ai-frames-macos-arm64.tar.gz"
+                sha256 "${SHA_ARM64}"
+              else
+                url "${BASE}/ai-frames-macos-x64.tar.gz"
+                sha256 "${SHA_X64}"
+              end
+            end
+
+            on_linux do
+              url "${BASE}/ai-frames-linux-x64.tar.gz"
+              sha256 "${SHA_LINUX}"
+            end
+
+            def install
+              bin.install "ai-frames"
+              (lib/"ai-frames").install "keytar.node" if File.exist?("keytar.node")
+            end
+
+            test do
+              system "#{bin}/ai-frames", "--version"
+            end
+          end
+          FORMULA
+
+      - name: Commit and push
+        run: |
+          cd tap
+          git config user.name  "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git add Formula/ai-frames.rb
+          git diff --cached --quiet || git commit -m "chore: update ai-frames to ${{ github.ref_name }}"
+          git push
