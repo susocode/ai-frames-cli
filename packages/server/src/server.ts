@@ -23,8 +23,20 @@ import { logger } from './utils/logger.js'
 import { getCert } from './utils/tls.js'
 import { checkDependencies } from './utils/check-deps.js'
 
-const __dirname = path.dirname(fileURLToPath(import.meta.url))
 const PORT = process.env.PORT ? parseInt(process.env.PORT) : 3141
+
+// In a Bun compiled binary import.meta.url is a virtual path (/$bunfs/…),
+// not a file:// URL. Resolve the UI dist relative to the real binary instead.
+function getUiDist(): string {
+  if (!import.meta.url.startsWith('file://')) {
+    // Running as compiled binary — UI is installed next to the binary under
+    // ../share/ai-frames/ui (Homebrew convention: bin/ai-frames → share/ai-frames/ui)
+    return path.resolve(path.dirname(process.execPath), '../share/ai-frames/ui')
+  }
+  // Dev mode — UI dist is relative to this source file
+  const __dirname = path.dirname(fileURLToPath(import.meta.url))
+  return path.resolve(__dirname, '../../ui/dist')
+}
 
 export async function startServer() {
   repairConfig()
@@ -55,7 +67,7 @@ export async function startServer() {
   app.use('/api/assistant-init', assistantInitRouter)
 
   // Serve React UI (built artifacts) — skipped in dev if dist doesn't exist
-  const uiDist = path.resolve(__dirname, '../../ui/dist')
+  const uiDist = getUiDist()
   const uiIndex = path.join(uiDist, 'index.html')
   if (fs.existsSync(uiIndex)) {
     app.use(express.static(uiDist))

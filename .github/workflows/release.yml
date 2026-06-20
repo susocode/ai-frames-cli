@@ -67,11 +67,12 @@ jobs:
             cp "$KEYTAR_NODE" bin/keytar-${{ matrix.target }}.node
           fi
 
-      # Tarball contains: binary (named "ai-frames") + keytar.node if present
+      # Tarball contains: binary + ui/ + keytar.node (if native arch)
       - name: Create tarball (${{ matrix.target }})
         run: |
           mkdir -p staging
           cp bin/ai-frames-${{ matrix.target }} staging/ai-frames
+          cp -r packages/ui/dist staging/ui
           [ -f bin/keytar-${{ matrix.target }}.node ] && cp bin/keytar-${{ matrix.target }}.node staging/keytar.node
           tar -czf bin/ai-frames-${{ matrix.target }}.tar.gz -C staging .
           shasum -a 256 bin/ai-frames-${{ matrix.target }}.tar.gz \
@@ -82,6 +83,7 @@ jobs:
         run: |
           mkdir -p staging-x64
           cp bin/ai-frames-macos-x64 staging-x64/ai-frames
+          cp -r packages/ui/dist staging-x64/ui
           tar -czf bin/ai-frames-macos-x64.tar.gz -C staging-x64 .
           shasum -a 256 bin/ai-frames-macos-x64.tar.gz \
             | awk '{print $1}' > bin/ai-frames-macos-x64.sha256
@@ -181,6 +183,7 @@ jobs:
 
             def install
               bin.install "ai-frames"
+              (share/"ai-frames").install "ui"
               (lib/"ai-frames").install "keytar.node" if File.exist?("keytar.node")
             end
 
