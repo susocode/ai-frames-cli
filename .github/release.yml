@@ -1,0 +1,18 @@
+changelog:
+  exclude:
+    labels:
+      - chore
+      - skip-changelog
+    authors:
+      - github-actions[bot]
+      - dependabot[bot]
+  categories:
+    - title: Breaking Changes
+      labels:
+        - release/major
+    - title: New Features
+      labels:
+        - release/minor
+    - title: Bug Fixes
+      labels:
+        - release/patch
