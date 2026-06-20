@@ -389,7 +389,6 @@ body {
   display: flex;
   align-items: flex-start;
   gap: 6px;
-  {display: flex; align-items: center;}
   color: #f59e0b;
   background: rgba(245, 158, 11, 0.08);
   border: 1px solid rgba(245, 158, 11, 0.25);
