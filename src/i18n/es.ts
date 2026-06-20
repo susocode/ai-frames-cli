@@ -207,7 +207,7 @@ export default {
   workspace_status_missing: 'Faltante',
   workspace_status_synced: 'Sincronizado',
   workspace_status_outdated: 'Desactualizado',
-  workspace_recreate_button: 'Recrear faltantes',
+  workspace_recreate_button: 'Recrear carpetas faltantes',
   workspace_recreating: 'Recreando...',
   workspace_recreate_done: 'Listo',
   workspace_recreate_error: 'Error al recrear directorios',

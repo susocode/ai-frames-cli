@@ -208,7 +208,7 @@ export default {
   workspace_status_missing: 'Missing',
   workspace_status_synced: 'Synced',
   workspace_status_outdated: 'Outdated',
-  workspace_recreate_button: 'Recreate missing',
+  workspace_recreate_button: 'Recreate missing folders',
   workspace_recreating: 'Recreating...',
   workspace_recreate_done: 'Done',
   workspace_recreate_error: 'Error recreating directories',
