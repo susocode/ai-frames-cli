@@ -18,7 +18,9 @@ interface Props {
 export default function AssistantCard({ id, label, prefix, isSelected, dirs, inRepo, onToggle, onSave, onDirsCreated }: Props) {
   const { t } = useLang()
   const allExist = dirs.length > 0 && dirs.every(d => d.exists)
+  const hasMissingDirs = dirs.length > 0 && !allExist
   const [creating, setCreating] = useState(false)
+  const [recreating, setRecreating] = useState(false)
   const [mappings, setMappings] = useState<DirMapping[]>([])
   const [entries, setEntries] = useState<CustomEntry[]>([])
   const [mappingSaving, setMappingSaving] = useState(false)
@@ -35,6 +37,13 @@ export default function AssistantCard({ id, label, prefix, isSelected, dirs, inR
     setCreating(true)
     await fetch(`/api/assistant-init/${id}`, { method: 'POST' })
     setCreating(false)
+    onDirsCreated()
+  }
+
+  async function recreateMissingDirs() {
+    setRecreating(true)
+    await fetch('/api/workspace-dirs/recreate', { method: 'POST' })
+    setRecreating(false)
     onDirsCreated()
   }
 
@@ -61,6 +70,14 @@ export default function AssistantCard({ id, label, prefix, isSelected, dirs, inR
           )}
           {inRepo && dirs.length > 0 && (
             <div className="workspace-group" style={{ marginBottom: 0 }}>
+              {hasMissingDirs && (
+                <div className="workspace-group-header" style={{ padding: '6px 12px' }}>
+                  <span />
+                  <button className="btn-sm-warning" disabled={recreating} onClick={recreateMissingDirs}>
+                    {recreating ? t.workspace_recreating : t.workspace_recreate_button}
+                  </button>
+                </div>
+              )}
               <table className="repo-table workspace-table">
                 <thead><tr>
                   <th style={{ textAlign: 'left' }}>{t.workspace_col_path}</th>

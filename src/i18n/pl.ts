@@ -207,7 +207,7 @@ export default {
   workspace_status_missing: 'Brak',
   workspace_status_synced: 'Zsynchronizowany',
   workspace_status_outdated: 'Nieaktualny',
-  workspace_recreate_button: 'Odtwórz brakujące',
+  workspace_recreate_button: 'Odtwórz brakujące foldery',
   workspace_recreating: 'Odtwarzanie...',
   workspace_recreate_done: 'Gotowe',
   workspace_recreate_error: 'Błąd podczas odtwarzania katalogów',

@@ -156,6 +156,9 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
           </SidebarLink>
 
           <div className="sidebar-bottom">
+            {!sidebarCollapsed && (
+              <span className="sidebar-version">v{process.env.NEXT_PUBLIC_VERSION}</span>
+            )}
             <ThemeToggle />
             <LangSelector />
           </div>
