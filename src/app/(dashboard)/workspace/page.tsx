@@ -30,6 +30,7 @@ export default function WorkspacePage() {
   const [originalSelected, setOriginalSelected] = useState<Set<string>>(new Set())
   const [mappings, setMappings] = useState<DirMapping[]>([])
   const [mappingSaving, setMappingSaving] = useState(false)
+  const [recreating, setRecreating] = useState(false)
 
   const loadDirs = useCallback(async () => {
     setLoadingDirs(true)
@@ -77,6 +78,14 @@ export default function WorkspacePage() {
   }, [loadDirs])
 
   const hasChanges = [...selected].sort().join() !== [...originalSelected].sort().join()
+  const hasMissingBase = data?.base.some(d => !d.exists) ?? false
+
+  async function recreateBaseDirs() {
+    setRecreating(true)
+    await fetch('/api/workspace-dirs/recreate', { method: 'POST' })
+    await loadDirs()
+    setRecreating(false)
+  }
 
   function toggle(id: string) {
     if (selected.has(id) && assistantSelections[id] === true) {
@@ -142,6 +151,11 @@ export default function WorkspacePage() {
           <div className="workspace-group">
             <div className="workspace-group-header">
               <span className="workspace-group-label">.aicontext/</span>
+              {hasMissingBase && (
+                <button className="btn-sm-outline" disabled={recreating} onClick={recreateBaseDirs}>
+                  {recreating ? t.workspace_recreating : t.workspace_recreate_button}
+                </button>
+              )}
             </div>
             <table className="repo-table workspace-table">
               <thead>

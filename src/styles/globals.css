@@ -1191,6 +1191,27 @@ body {
   gap: 8px;
 }
 
+.btn-sm-outline {
+  font-size: 12px;
+  padding: 4px 10px;
+  border-radius: 6px;
+  border: 1px solid var(--border);
+  background: transparent;
+  color: var(--text);
+  cursor: pointer;
+  white-space: nowrap;
+  transition: background 0.15s, border-color 0.15s;
+}
+.btn-sm-outline:hover:not(:disabled) {
+  background: var(--surface-hover);
+  border-color: var(--primary);
+  color: var(--primary);
+}
+.btn-sm-outline:disabled {
+  opacity: 0.5;
+  cursor: default;
+}
+
 /* Assistant selection list */
 .assistant-select-list {
   display: flex;
