@@ -597,7 +597,7 @@ body {
   align-items: center;
   justify-content: center;
   gap: 6px;
-  flex-wrap: nowrap;
+  flex-wrap: wrap;
   overflow: hidden;
 }
 
@@ -612,7 +612,7 @@ body {
   text-align: center;
   font-size: 11px;
   color: var(--text-muted);
-  padding-top: 6px;
+  padding-bottom: 4px;
   letter-spacing: 0.02em;
 }
 
