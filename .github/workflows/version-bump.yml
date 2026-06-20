@@ -1,0 +1,60 @@
+name: Version Bump
+
+on:
+  push:
+    tags:
+      - 'v*.*.*'
+
+jobs:
+  bump:
+    name: Bump versions and trigger release
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+      pull-requests: write
+
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          ref: main
+
+      - name: Extract version from tag
+        run: echo "VERSION=${GITHUB_REF_NAME#v}" >> $GITHUB_ENV
+
+      - name: Bump package.json versions
+        run: |
+          for f in package.json packages/server/package.json packages/ui/package.json; do
+            sed -i "s/\"version\": \"[^\"]*\"/\"version\": \"$VERSION\"/" $f
+          done
+
+      - name: Create PR and merge
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          BRANCH="chore/bump-v${VERSION}"
+
+          git config user.name  "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git checkout -b $BRANCH
+          git add package.json packages/server/package.json packages/ui/package.json
+          git diff --cached --quiet && echo "No version change needed" && exit 0
+
+          git commit -m "chore: bump version to ${VERSION}"
+          git push origin $BRANCH
+
+          PR_URL=$(gh pr create \
+            --title "chore: bump version to ${VERSION}" \
+            --body "Automated version bump triggered by tag \`${{ github.ref_name }}\`." \
+            --base main \
+            --head $BRANCH)
+
+          PR_NUMBER=$(gh pr view $BRANCH --json number --jq '.number')
+          gh pr merge $PR_NUMBER --squash --delete-branch
+
+      - name: Trigger release build
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          gh api repos/${{ github.repository }}/dispatches \
+            --field event_type=release \
+            --field client_payload[version]=${{ github.ref_name }}
